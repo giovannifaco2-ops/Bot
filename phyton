@@ -1,0 +1,77 @@
+import discord
+from discord import app_commands
+import asyncio
+import datetime
+
+# ================== CONFIG ==================
+TOKEN = " MTQ5MzY1ODI3MDA2ODYzNzgyOA.Gio4_n.22bZr5tZ28fGZBApwx1kY9ZyviJAfIbrdBAcVY"
+
+# Dizionario per salvare il canale per ogni server
+target_channels = {}   # {guild_id: channel_id}
+
+bot = discord.Client(intents=discord.Intents.default())
+tree = app_commands.CommandTree(bot)
+
+# ============================================
+
+@bot.event
+async def on_ready():
+    print(f"Bot avviato come {bot.user}")
+    await tree.sync()  # Sincronizza i comandi slash
+    print("Comandi slash sincronizzati!")
+
+
+# ====================== COMANDO PER IMPOSTARE IL CANALE ======================
+@tree.command(name="setchannel", description="Imposta il canale dove verranno fatti i ping @everyone")
+@app_commands.describe(canale="Canale in cui mandare i ping")
+async def setchannel(interaction: discord.Interaction, canale: discord.TextChannel):
+    target_channels[interaction.guild_id] = canale.id
+    await interaction.response.send_message(
+        f"✅ Canale impostato su **{canale.mention}** per i ping @everyone.", 
+        ephemeral=True
+    )
+
+
+# ====================== COMANDO /SET ======================
+@tree.command(name="set", description="Imposta un ping @everyone a una certa ora")
+@app_commands.describe(ora="Ora nel formato HH:MM (es. 15:30)")
+async def set_reminder(interaction: discord.Interaction, ora: str):
+    try:
+        hour, minute = map(int, ora.split(":"))
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError
+    except:
+        await interaction.response.send_message("❌ Formato ora non valido. Usa `HH:MM` (es. 14:30)", ephemeral=True)
+        return
+
+    guild_id = interaction.guild_id
+    if guild_id not in target_channels:
+        await interaction.response.send_message("❌ Prima imposta il canale con `/setchannel`!", ephemeral=True)
+        return
+
+    channel = bot.get_channel(target_channels[guild_id])
+    if not channel:
+        await interaction.response.send_message("❌ Canale non trovato!", ephemeral=True)
+        return
+
+    # Calcolo del tempo rimanente
+    now = datetime.datetime.now()
+    target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    if target_time < now:
+        target_time += datetime.timedelta(days=1)  # Se l'ora è già passata, imposta per domani
+
+    delay = (target_time - now).total_seconds()
+
+    await interaction.response.send_message(
+        f"✅ Ping @everyone programmato per le **{ora}** in {channel.mention}", 
+        ephemeral=True
+    )
+
+    # Aspetta e pinga
+    await asyncio.sleep(delay)
+    
+    await channel.send(f"@everyone **È ora!** ({ora})")
+
+
+bot.run(TOKEN)
