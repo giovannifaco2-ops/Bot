@@ -1,0 +1,3 @@
+Metti dentro questo un cmd se no il bot non funzionera
+
+discord.py
